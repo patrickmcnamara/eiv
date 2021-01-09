@@ -9,11 +9,17 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nfnt/resize"
 	"golang.org/x/exp/shiny/driver"
 	"golang.org/x/exp/shiny/screen"
 	"golang.org/x/mobile/event/lifecycle"
 	"golang.org/x/mobile/event/paint"
 	"golang.org/x/mobile/event/size"
+)
+
+const (
+	bw = 1280
+	bh = 720
 )
 
 func main() {
@@ -31,60 +37,63 @@ func main() {
 	chk(err)
 
 	driver.Main(func(s screen.Screen) {
-		// create window
-		title := fmt.Sprintf("%s (%s)", filepath.Base(filename), mt)
-		w, err := s.NewWindow(&screen.NewWindowOptions{
-			Width:  m.Bounds().Dx(),
-			Height: m.Bounds().Dy(),
+		// create window sized to image or max
+		w, h := bw, bh
+		mw, mh := m.Bounds().Dx(), m.Bounds().Dy()
+		if mw > bw {
+			h = mh * bw / mw
+			w = bw
+		}
+		if h > bh {
+			w = w * bh / h
+			h = bh
+		}
+		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
+		wnd, err := s.NewWindow(&screen.NewWindowOptions{
+			Width:  w,
+			Height: h,
 			Title:  title,
 		})
 		chk(err)
-		defer w.Release()
-
-		// set default points
-		wr := m.Bounds()
-		x, y := 0, 0
+		defer wnd.Release()
+		wr := image.Rect(0, 0, w, h)
 
 		// create buffer
-		b, err := s.NewBuffer(m.Bounds().Max)
+		buf, err := s.NewBuffer(m.Bounds().Max)
 		chk(err)
-		defer b.Release()
+		defer buf.Release()
 
 		for {
 			// wait for next event and handle
-			switch e := w.NextEvent().(type) {
+			switch e := wnd.NextEvent().(type) {
+
 			// window close
 			case lifecycle.Event:
-				switch e.To {
-				case lifecycle.StageDead:
+				if e.To == lifecycle.StageDead {
 					return
-				default:
-					continue
 				}
-			// window resize
+
+			// window resize (or close on macOS)
 			case size.Event:
 				wr = e.Bounds()
+				if wr.Empty() {
+					return
+				}
+
 			// other paint
 			case paint.Event:
-			default:
-				continue
-			}
+				// fill window as black
+				wnd.Fill(wr, color.Black, draw.Src)
 
-			// fill window as black
-			w.Fill(wr, color.Black, draw.Src)
+				// resize and draw image to buffer in centre
+				rm := resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.Lanczos3)
+				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
 
-			// draw image to buffer in centre
-			if m.Bounds().Dx() < wr.Dx() {
-				x = (wr.Dx() - m.Bounds().Dx()) / 2
+				// upload buffer to window and publish
+				wnd.Upload(sp, buf, rm.Bounds())
+				wnd.Publish()
 			}
-			if m.Bounds().Dy() < wr.Dy() {
-				y = (wr.Dy() - m.Bounds().Dy()) / 2
-			}
-			draw.Draw(b.RGBA(), b.Bounds(), m, image.Point{}, draw.Src)
-
-			// upload buffer to window and publish
-			w.Upload(image.Point{x, y}, b, b.Bounds())
-			w.Publish()
 		}
 	})
 }
