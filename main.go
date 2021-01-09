@@ -17,6 +17,11 @@ import (
 	"golang.org/x/mobile/event/size"
 )
 
+const (
+	bw = 1280
+	bh = 720
+)
+
 func main() {
 	// open image
 	if len(os.Args) < 2 {
@@ -33,33 +38,34 @@ func main() {
 
 	driver.Main(func(s screen.Screen) {
 		// create window sized to image or max
-		width, height := 1280, 720
-		mw := m.Bounds().Dx()
-		mh := m.Bounds().Dy()
+		w, h := bw, bh
+		mw, mh := m.Bounds().Dx(), m.Bounds().Dy()
+		if mw > bw {
+			h = mh * bw / mw
+			w = bw
+		}
+		if h > bh {
+			w = w * bh / h
+			h = bh
+		}
 		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
-		if mw < width {
-			width = mw
-		}
-		if mh < height {
-			height = mh
-		}
-		w, err := s.NewWindow(&screen.NewWindowOptions{
-			Width:  width,
-			Height: height,
+		wnd, err := s.NewWindow(&screen.NewWindowOptions{
+			Width:  w,
+			Height: h,
 			Title:  title,
 		})
 		chk(err)
-		defer w.Release()
-		wr := image.Rect(0, 0, width, height)
+		defer wnd.Release()
+		wr := image.Rect(0, 0, w, h)
 
 		// create buffer
-		b, err := s.NewBuffer(m.Bounds().Max)
+		buf, err := s.NewBuffer(m.Bounds().Max)
 		chk(err)
-		defer b.Release()
+		defer buf.Release()
 
 		for {
 			// wait for next event and handle
-			switch e := w.NextEvent().(type) {
+			switch e := wnd.NextEvent().(type) {
 
 			// window close
 			case lifecycle.Event:
@@ -77,16 +83,16 @@ func main() {
 			// other paint
 			case paint.Event:
 				// fill window as black
-				w.Fill(wr, color.Black, draw.Src)
+				wnd.Fill(wr, color.Black, draw.Src)
 
 				// resize and draw image to buffer in centre
 				rm := resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.Lanczos3)
 				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
-				draw.Draw(b.RGBA(), b.Bounds(), rm, image.Point{}, draw.Src)
+				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
 
 				// upload buffer to window and publish
-				w.Upload(sp, b, rm.Bounds())
-				w.Publish()
+				wnd.Upload(sp, buf, rm.Bounds())
+				wnd.Publish()
 			}
 		}
 	})
