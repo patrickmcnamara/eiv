@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nfnt/resize"
 	"golang.org/x/exp/shiny/driver"
 	"golang.org/x/exp/shiny/screen"
 	"golang.org/x/mobile/event/lifecycle"
@@ -31,11 +32,20 @@ func main() {
 	chk(err)
 
 	driver.Main(func(s screen.Screen) {
-		// create window
-		title := fmt.Sprintf("%s (%s)", filepath.Base(filename), mt)
+		// create window sized to image or max
+		width, height := 1280, 720
+		mw := m.Bounds().Dx()
+		mh := m.Bounds().Dy()
+		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
+		if mw < width {
+			width = mw
+		}
+		if mh < height {
+			height = mh
+		}
 		w, err := s.NewWindow(&screen.NewWindowOptions{
-			Width:  m.Bounds().Dx(),
-			Height: m.Bounds().Dy(),
+			Width:  width,
+			Height: height,
 			Title:  title,
 		})
 		chk(err)
@@ -53,38 +63,36 @@ func main() {
 		for {
 			// wait for next event and handle
 			switch e := w.NextEvent().(type) {
+
 			// window close
 			case lifecycle.Event:
-				switch e.To {
-				case lifecycle.StageDead:
+				if e.To == lifecycle.StageDead {
 					return
-				default:
-					continue
 				}
+
 			// window resize
 			case size.Event:
 				wr = e.Bounds()
+
 			// other paint
 			case paint.Event:
-			default:
-				continue
-			}
+				// fill window as black
+				w.Fill(wr, color.Black, draw.Src)
 
-			// fill window as black
-			w.Fill(wr, color.Black, draw.Src)
+				// resize and draw image to buffer in centre
+				rm := resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.Lanczos3)
+				if rm.Bounds().Dx() < wr.Dx() {
+					x = (wr.Dx() - rm.Bounds().Dx()) / 2
+				}
+				if rm.Bounds().Dy() < wr.Dy() {
+					y = (wr.Dy() - rm.Bounds().Dy()) / 2
+				}
+				draw.Draw(b.RGBA(), b.Bounds(), rm, image.Point{}, draw.Src)
 
-			// draw image to buffer in centre
-			if m.Bounds().Dx() < wr.Dx() {
-				x = (wr.Dx() - m.Bounds().Dx()) / 2
+				// upload buffer to window and publish
+				w.Upload(image.Point{x, y}, b, b.Bounds())
+				w.Publish()
 			}
-			if m.Bounds().Dy() < wr.Dy() {
-				y = (wr.Dy() - m.Bounds().Dy()) / 2
-			}
-			draw.Draw(b.RGBA(), b.Bounds(), m, image.Point{}, draw.Src)
-
-			// upload buffer to window and publish
-			w.Upload(image.Point{x, y}, b, b.Bounds())
-			w.Publish()
 		}
 	})
 }
