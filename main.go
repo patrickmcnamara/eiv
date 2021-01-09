@@ -67,9 +67,12 @@ func main() {
 					return
 				}
 
-			// window resize
+			// window resize (or close on macOS)
 			case size.Event:
 				wr = e.Bounds()
+				if wr.Empty() {
+					return
+				}
 
 			// other paint
 			case paint.Event:
