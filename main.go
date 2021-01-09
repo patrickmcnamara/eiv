@@ -50,10 +50,7 @@ func main() {
 		})
 		chk(err)
 		defer w.Release()
-
-		// set default points
-		wr := m.Bounds()
-		x, y := 0, 0
+		wr := image.Rect(0, 0, width, height)
 
 		// create buffer
 		b, err := s.NewBuffer(m.Bounds().Max)
@@ -81,16 +78,11 @@ func main() {
 
 				// resize and draw image to buffer in centre
 				rm := resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.Lanczos3)
-				if rm.Bounds().Dx() < wr.Dx() {
-					x = (wr.Dx() - rm.Bounds().Dx()) / 2
-				}
-				if rm.Bounds().Dy() < wr.Dy() {
-					y = (wr.Dy() - rm.Bounds().Dy()) / 2
-				}
+				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
 				draw.Draw(b.RGBA(), b.Bounds(), rm, image.Point{}, draw.Src)
 
 				// upload buffer to window and publish
-				w.Upload(image.Point{x, y}, b, b.Bounds())
+				w.Upload(sp, b, rm.Bounds())
 				w.Publish()
 			}
 		}
