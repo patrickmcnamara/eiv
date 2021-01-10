@@ -34,21 +34,19 @@ func main() {
 	mf, err := os.Open(filename)
 	chk(err)
 
-	// decode image
+	// decode image and resize to max
 	m, mt, err := image.Decode(mf)
+	omw, omh := m.Bounds().Dx(), m.Bounds().Dy()
 	m = resize.Thumbnail(maxw, maxh, m, resize.NearestNeighbor)
 	chk(err)
 
+	// create initial resized image
+	rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
+	rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
+
 	driver.Main(func(s screen.Screen) {
-		// create initial resized image
-		rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
-
-		// get image sizes
-		mw, mh := m.Bounds().Dx(), m.Bounds().Dy()
-		rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
-
 		// create window sized to resized image
-		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
+		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, omw, omh)
 		wnd, err := s.NewWindow(&screen.NewWindowOptions{
 			Width:  rmw,
 			Height: rmh,
@@ -85,7 +83,7 @@ func main() {
 			// other paint
 			case paint.Event:
 				// if image size has changed since last paint
-				if !buf.Bounds().In(wr) {
+				if !m.Bounds().In(wr) {
 					// release old buffer
 					buf.Release()
 
