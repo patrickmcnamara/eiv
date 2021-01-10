@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	bw = 1280
-	bh = 720
+	maxw = 3840
+	maxh = 2160
+	bw   = 1280
+	bh   = 720
 )
 
 func main() {
@@ -32,20 +34,19 @@ func main() {
 	mf, err := os.Open(filename)
 	chk(err)
 
-	// decode image
+	// decode image and resize to max
 	m, mt, err := image.Decode(mf)
+	omw, omh := m.Bounds().Dx(), m.Bounds().Dy()
+	m = resize.Thumbnail(maxw, maxh, m, resize.NearestNeighbor)
 	chk(err)
 
+	// create initial resized image
+	rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
+	rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
+
 	driver.Main(func(s screen.Screen) {
-		// create initial resized image
-		rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
-
-		// get image sizes
-		mw, mh := m.Bounds().Dx(), m.Bounds().Dy()
-		rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
-
 		// create window sized to resized image
-		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
+		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, omw, omh)
 		wnd, err := s.NewWindow(&screen.NewWindowOptions{
 			Width:  rmw,
 			Height: rmh,
@@ -54,12 +55,10 @@ func main() {
 		chk(err)
 		wr := image.Rect(0, 0, rmw, rmh)
 
-		// create initial buffer
+		// create initial buffer and draw image to it
 		buf, err := s.NewBuffer(rm.Bounds().Size())
 		chk(err)
-
-		// calculate initial buffer starter point
-		sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+		draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
 
 		for {
 			// wait for next event and handle
@@ -83,24 +82,27 @@ func main() {
 
 			// other paint
 			case paint.Event:
-				// release old buffer
-				buf.Release()
+				// if image size has changed since last paint
+				if !m.Bounds().In(wr) {
+					// release old buffer
+					buf.Release()
 
-				// create new resized image and buffer
-				rm = resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.NearestNeighbor)
-				buf, err = s.NewBuffer(rm.Bounds().Size())
-				chk(err)
+					// create new resized image and buffer
+					rm = resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.NearestNeighbor)
+					buf, err = s.NewBuffer(rm.Bounds().Size())
+					chk(err)
 
-				// resize and draw image to buffer in centre
-				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
+					// draw image to buffer
+					draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
+				}
 
 				// calculate new starting point
-				sp = image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
 
 				// fill window as black
 				wnd.Fill(wr, color.Black, draw.Src)
 
-				// upload buffer to window and publish
+				// upload buffer to window at starting point and publish
 				wnd.Upload(sp, buf, buf.Bounds())
 				wnd.Publish()
 			}
