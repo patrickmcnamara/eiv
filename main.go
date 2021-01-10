@@ -36,9 +36,9 @@ func main() {
 
 	// decode image and resize to max
 	m, mt, err := image.Decode(mf)
+	chk(err)
 	omw, omh := m.Bounds().Dx(), m.Bounds().Dy()
 	m = resize.Thumbnail(maxw, maxh, m, resize.NearestNeighbor)
-	chk(err)
 
 	// create initial resized image
 	rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
