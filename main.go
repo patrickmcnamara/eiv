@@ -23,7 +23,7 @@ const (
 )
 
 func main() {
-	// open image
+	// open image file
 	if len(os.Args) < 2 {
 		err := errors.New("no filename given")
 		chk(err)
@@ -37,31 +37,29 @@ func main() {
 	chk(err)
 
 	driver.Main(func(s screen.Screen) {
-		// create window sized to image or max
-		w, h := bw, bh
+		// create initial resized image
+		rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
+
+		// get image sizes
 		mw, mh := m.Bounds().Dx(), m.Bounds().Dy()
-		if mw > bw {
-			h = mh * bw / mw
-			w = bw
-		}
-		if h > bh {
-			w = w * bh / h
-			h = bh
-		}
+		rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
+
+		// create window sized to resized image
 		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, mw, mh)
 		wnd, err := s.NewWindow(&screen.NewWindowOptions{
-			Width:  w,
-			Height: h,
+			Width:  rmw,
+			Height: rmh,
 			Title:  title,
 		})
 		chk(err)
-		defer wnd.Release()
-		wr := image.Rect(0, 0, w, h)
+		wr := image.Rect(0, 0, rmw, rmh)
 
-		// create buffer
-		buf, err := s.NewBuffer(m.Bounds().Max)
+		// create initial buffer
+		buf, err := s.NewBuffer(rm.Bounds().Size())
 		chk(err)
-		defer buf.Release()
+
+		// calculate initial buffer starter point
+		sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
 
 		for {
 			// wait for next event and handle
@@ -75,23 +73,35 @@ func main() {
 
 			// window resize (or close on macOS)
 			case size.Event:
+				// update window rectangle
 				wr = e.Bounds()
+
+				// check to close window on macOS
 				if wr.Empty() {
 					return
 				}
 
 			// other paint
 			case paint.Event:
+				// release old buffer
+				buf.Release()
+
+				// create new resized image and buffer
+				rm = resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.NearestNeighbor)
+				buf, err = s.NewBuffer(rm.Bounds().Size())
+				chk(err)
+
+				// resize and draw image to buffer in centre
+				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
+
+				// calculate new starting point
+				sp = image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+
 				// fill window as black
 				wnd.Fill(wr, color.Black, draw.Src)
 
-				// resize and draw image to buffer in centre
-				rm := resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.Lanczos3)
-				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
-				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
-
 				// upload buffer to window and publish
-				wnd.Upload(sp, buf, rm.Bounds())
+				wnd.Upload(sp, buf, buf.Bounds())
 				wnd.Publish()
 			}
 		}
