@@ -4,9 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"plugin"
+	"runtime"
 )
 
 func loadPlugins() error {
+	switch runtime.GOOS {
+	case "darwin", "freebsd", "linux":
+	default:
+		return nil
+	}
 	configPath, err := os.UserConfigDir()
 	if err != nil {
 		return err
