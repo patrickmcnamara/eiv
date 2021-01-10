@@ -57,12 +57,10 @@ func main() {
 		chk(err)
 		wr := image.Rect(0, 0, rmw, rmh)
 
-		// create initial buffer
+		// create initial buffer and draw image to it
 		buf, err := s.NewBuffer(rm.Bounds().Size())
 		chk(err)
-
-		// calculate initial buffer starter point
-		sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+		draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
 
 		for {
 			// wait for next event and handle
@@ -86,24 +84,27 @@ func main() {
 
 			// other paint
 			case paint.Event:
-				// release old buffer
-				buf.Release()
+				// if image size has changed since last paint
+				if !buf.Bounds().In(wr) {
+					// release old buffer
+					buf.Release()
 
-				// create new resized image and buffer
-				rm = resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.NearestNeighbor)
-				buf, err = s.NewBuffer(rm.Bounds().Size())
-				chk(err)
+					// create new resized image and buffer
+					rm = resize.Thumbnail(uint(wr.Dx()), uint(wr.Dy()), m, resize.NearestNeighbor)
+					buf, err = s.NewBuffer(rm.Bounds().Size())
+					chk(err)
 
-				// resize and draw image to buffer in centre
-				draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
+					// draw image to buffer
+					draw.Draw(buf.RGBA(), buf.Bounds(), rm, image.Point{}, draw.Src)
+				}
 
 				// calculate new starting point
-				sp = image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
 
 				// fill window as black
 				wnd.Fill(wr, color.Black, draw.Src)
 
-				// upload buffer to window and publish
+				// upload buffer to window at starting point and publish
 				wnd.Upload(sp, buf, buf.Bounds())
 				wnd.Publish()
 			}
