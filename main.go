@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	bw = 1280
-	bh = 720
+	maxw = 3840
+	maxh = 2160
+	bw   = 1280
+	bh   = 720
 )
 
 func main() {
@@ -34,6 +36,7 @@ func main() {
 
 	// decode image
 	m, mt, err := image.Decode(mf)
+	m = resize.Thumbnail(maxw, maxh, m, resize.NearestNeighbor)
 	chk(err)
 
 	driver.Main(func(s screen.Screen) {
