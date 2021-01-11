@@ -9,12 +9,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nfnt/resize"
 	"golang.org/x/exp/shiny/driver"
 	"golang.org/x/exp/shiny/screen"
 	"golang.org/x/mobile/event/lifecycle"
 	"golang.org/x/mobile/event/paint"
 	"golang.org/x/mobile/event/size"
+
+	"github.com/nfnt/resize"
 )
 
 const (
@@ -38,10 +39,10 @@ func main() {
 	m, mt, err := image.Decode(mf)
 	chk(err)
 	omw, omh := m.Bounds().Dx(), m.Bounds().Dy()
-	m = resize.Thumbnail(maxw, maxh, m, resize.NearestNeighbor)
+	m = resize.Thumbnail(maxw, maxh, m, resize.Lanczos3)
 
 	// create initial resized image
-	rm := resize.Thumbnail(bw, bh, m, resize.Lanczos3)
+	rm := resize.Thumbnail(bw, bh, m, resize.NearestNeighbor)
 	rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
 
 	driver.Main(func(s screen.Screen) {
