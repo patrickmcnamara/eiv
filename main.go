@@ -21,8 +21,10 @@ import (
 const (
 	maxw = 3840
 	maxh = 2160
-	bw   = 1280
-	bh   = 720
+	minw = 400
+	minh = 400
+	irw  = 1280
+	irh  = 720
 )
 
 func main() {
@@ -42,19 +44,27 @@ func main() {
 	m = resize.Thumbnail(maxw, maxh, m, resize.Lanczos3)
 
 	// create initial resized image
-	rm := resize.Thumbnail(bw, bh, m, resize.NearestNeighbor)
+	rm := resize.Thumbnail(irw, irh, m, resize.NearestNeighbor)
 	rmw, rmh := rm.Bounds().Dx(), rm.Bounds().Dy()
 
 	driver.Main(func(s screen.Screen) {
 		// create window sized to resized image
 		title := fmt.Sprintf("%s (%s/%d*%d)", filepath.Base(filename), mt, omw, omh)
+		ww := rmw
+		if ww < minw {
+			ww = minw
+		}
+		wh := rmh
+		if wh < minh {
+			wh = minh
+		}
 		wnd, err := s.NewWindow(&screen.NewWindowOptions{
-			Width:  rmw,
-			Height: rmh,
+			Width:  ww,
+			Height: wh,
 			Title:  title,
 		})
 		chk(err)
-		wr := image.Rect(0, 0, rmw, rmh)
+		wr := image.Rect(0, 0, ww, wh)
 
 		// create initial buffer and draw image to it
 		buf, err := s.NewBuffer(rm.Bounds().Size())
@@ -98,7 +108,10 @@ func main() {
 				}
 
 				// calculate new starting point
-				sp := image.Pt((wr.Dx()-rm.Bounds().Dx())/2, (wr.Dy()-rm.Bounds().Dy())/2)
+				sp := image.Pt(
+					(wr.Dx()-rm.Bounds().Dx())/2,
+					(wr.Dy()-rm.Bounds().Dy())/2,
+				)
 
 				// fill window as black
 				wnd.Fill(wr, color.Black, draw.Src)
